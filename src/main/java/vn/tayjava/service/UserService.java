@@ -3,12 +3,13 @@ package vn.tayjava.service;
 import vn.tayjava.controller.request.UserCreationRequest;
 import vn.tayjava.controller.request.UserPasswordRequest;
 import vn.tayjava.controller.request.UserUpdateRequest;
+import vn.tayjava.controller.response.UserPageResponse;
 import vn.tayjava.controller.response.UserResponse;
 
 import java.util.List;
 
 public interface UserService {
-    List<UserResponse> findAll();
+    UserPageResponse findAll(String keyword, String sortBy, int page, int pageSize);
 
     UserResponse findById(Long id);
 

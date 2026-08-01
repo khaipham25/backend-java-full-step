@@ -2,14 +2,21 @@ package vn.tayjava.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import vn.tayjava.common.UserStatus;
 import vn.tayjava.controller.request.UserCreationRequest;
 import vn.tayjava.controller.request.UserPasswordRequest;
 import vn.tayjava.controller.request.UserUpdateRequest;
+import vn.tayjava.controller.response.UserPageResponse;
 import vn.tayjava.controller.response.UserResponse;
+import vn.tayjava.exception.InvalidDataException;
 import vn.tayjava.exception.ResourceNotFoundException;
 import vn.tayjava.model.AddressEntity;
 import vn.tayjava.model.UserEntity;
@@ -19,6 +26,8 @@ import vn.tayjava.service.UserService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j(topic = "USER-SERVICE")
@@ -30,13 +39,83 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public List<UserResponse> findAll() {
-        return List.of();
+    // Lấy danh sách user, có tìm kiếm, sắp xếp và phân trang, rồi trả về UserPageResponse.
+    // /users?keyword=an&sortBy=firstName:asc&page=0&pageSize=10
+    public UserPageResponse findAll(String keyword, String sortBy, int page, int pageSize) {
+        log.info("findAll");
+
+        // sap xep Sorting
+        // Nếu frontend không truyền sortBy, chương trình mặc định:
+        // Sắp xếp theo cột id tăng dần
+        Sort.Order order = new Sort.Order(Sort.Direction.ASC, "id");
+
+        //Nếu sortBy có dữ liệu thì chương trình sẽ đọc chuỗi sắp xếp.
+        if (StringUtils.hasLength(sortBy)) {
+            //Dòng này tạo một regex để tách chuỗi có dạng:
+            //tênCột:kiểuSắpXếp
+            Pattern pattern = Pattern.compile("(\\w+?)(:)(.*)"); // tencot:asc|desc
+
+            // Dòng này đưa giá trị sortBy vào regex để kiểm tra và tách dữ liệu
+            Matcher matcher = pattern.matcher(sortBy);
+
+            //matcher.find() kiểm tra chuỗi có khớp với mẫu:
+            if (matcher.find()) {
+                // sortBy = "firstName:asc";
+                // columnName = "firstName";
+                String columnName = matcher.group(1);
+                if (matcher.group(3).equalsIgnoreCase("asc")) {
+
+                    order = new Sort.Order(Sort.Direction.ASC, columnName);
+                } else {
+                    order = new Sort.Order(Sort.Direction.DESC, columnName);
+                }
+            }
+        }
+
+        // Xử lý trường hợp FE muốn bat đầu voi page = 1
+        int pageNo = 0;
+        if (page > 0 ){
+            pageNo = page - 1;
+        }
+
+        // phan trang Paging
+        // Tạo đối tượng phân trang
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(order));
+
+        // Khai báo biến chứa kết quả truy vấn
+        // Biến này sẽ chứa kết quả lấy từ database.
+        Page<UserEntity> userEntities;
+
+        //StringUtils.hasLength(keyword) kiểm tra keyword có dữ liệu hay không.
+        if (StringUtils.hasLength(keyword)) {
+            keyword = "%" + keyword.toLowerCase() + "%";
+            // goi search method
+            userEntities = userRepository.searchByKeyword(keyword, pageable);
+        } else {
+            // Dòng này gọi repository để lấy user từ database.
+            userEntities = userRepository.findAll(pageable);
+        }
+
+        UserPageResponse userPageResponse = getUserPageResponse(page, pageSize, userEntities);
+        return userPageResponse;
     }
+
+
 
     @Override
     public UserResponse findById(Long id) {
-        return null;
+        log.info("findById {}", id);
+        UserEntity userEntity = getUserEntityById(id);
+        return UserResponse.builder()
+                .id(userEntity.getId())
+                .firstName(userEntity.getFirstName())
+                .lastName(userEntity.getLastName())
+                .gender(userEntity.getGender())
+                .birthday(userEntity.getBirthday())
+                .username(userEntity.getUsername())
+                .email(userEntity.getEmail())
+                .phone(userEntity.getPhone())
+                .build();
     }
 
     @Override
@@ -54,6 +133,12 @@ public class UserServiceImpl implements UserService {
     //Hoặc tất cả thao tác đều thành công, hoặc nếu có lỗi thì hủy toàn bộ những thao tác đã thực hiện.
     public Long save(UserCreationRequest req) {
         log.info("Saving user {}", req);
+
+        UserEntity userByEmail = userRepository.findByEmail(req.getEmail());
+        if (userByEmail != null) {
+            throw new InvalidDataException("Email already exists");
+        }
+
         UserEntity userEntity = new UserEntity();
         userEntity.setFirstName(req.getFirstName());
         userEntity.setLastName(req.getLastName());
@@ -169,5 +254,46 @@ public class UserServiceImpl implements UserService {
      */
     private UserEntity getUserEntityById(Long id) {
         return userRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    /**
+     * Convert Page<UserEntity to UserPageResponse
+     * @param page
+     * @param pageSize
+     * @param userEntities
+     * @return
+     */
+    private static UserPageResponse getUserPageResponse(int page, int pageSize, Page<UserEntity> userEntities) {
+        log.info("Convert User Entity Page");
+        // tra ve page no, page size, list danh sach
+        // Chuyển UserEntity thành UserResponse
+        // UserEntity dùng để ánh xạ với bảng trong database.
+        // Còn UserResponse là DTO dùng để trả dữ liệu cho frontend.
+        // ko nên trả thẳng vì userEntity có thể chứa password, refreshToken ...thông tin nội bo
+        List<UserResponse> userList = userEntities.stream().map(
+                //Biến entity đại diện cho từng UserEntity đang được xử lý.
+                //Dòng này dùng Lombok @Builder để tạo đối tượng.
+                entity -> UserResponse.builder()
+                        .id(entity.getId())
+                        .firstName(entity.getFirstName())
+                        .lastName(entity.getLastName())
+                        .gender(entity.getGender())
+                        .birthday(entity.getBirthday())
+                        .username(entity.getUsername())
+                        .email(entity.getEmail())
+                        .phone(entity.getPhone())
+                        .build()
+        ).toList();
+        //Sau khi map từng UserEntity thành UserResponse, .toList() gom tất cả lại thành:
+        //List<UserResponse>
+
+        //Tạo đối tượng kết quả phân trang
+        UserPageResponse userPageResponse = new UserPageResponse();
+        userPageResponse.setPageNumber(page);
+        userPageResponse.setPageSize(pageSize);
+        userPageResponse.setTotalPages(userEntities.getTotalPages());
+        userPageResponse.setTotalElements(userEntities.getTotalElements());
+        userPageResponse.setUsers(userList);
+        return userPageResponse;
     }
 }
