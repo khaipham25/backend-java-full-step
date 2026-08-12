@@ -2,6 +2,7 @@ package vn.tayjava.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import vn.tayjava.controller.response.UserPageResponse;
 import vn.tayjava.controller.response.UserResponse;
 import vn.tayjava.service.UserService;
 
+import java.io.IOException;
 import java.util.*;
 
 @RestController
@@ -105,6 +107,18 @@ public class UserController {
         result.put("data", "");
 
         return result;
+    }
+
+    @GetMapping("/confirm-email")
+    public void confirmEmail(@RequestParam("email") String secretCode, HttpServletResponse response) throws IOException {
+        log.info("Confirm email: {}", secretCode);
+        try {
+            // todo check or compare secretCode from Database
+        } catch (Exception e) {
+            log.error("Confirm email was failure, errorMessage={}", e.getMessage());
+        } finally {
+            response.sendRedirect("https://tayjava.vn/wp-admin");
+        }
     }
 
     @Operation(summary = "Delete user", description = "API activate user from database")

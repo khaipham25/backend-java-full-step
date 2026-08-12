@@ -7,17 +7,22 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import vn.tayjava.common.Gender;
 import vn.tayjava.common.UserStatus;
 import vn.tayjava.common.UserType;
 
+import java.io.Serializable;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "tbl_user")
-public class UserEntity {
+public class UserEntity implements UserDetails, Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     //@GeneratedValue dùng để nói với JPA/Hibernate rằng:
@@ -79,4 +84,30 @@ public class UserEntity {
     @UpdateTimestamp
     //Tự ghi lại thời gian mỗi khi bản ghi được cập nhật.
     private Date updatedAt;
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of();
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return UserDetails.super.isAccountNonExpired();
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return UserDetails.super.isAccountNonLocked();
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return UserDetails.super.isCredentialsNonExpired();
+    }
+
+    // Nếu active thì trả về true
+    @Override
+    public boolean isEnabled() {
+        return UserStatus.ACTIVE.equals(status);
+    }
 }

@@ -17,6 +17,12 @@ spring:
     hibernate:
       ddl-auto: none
 
+  sendgrid:
+    api-key: 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
+    from-email: ktuan2503@gmail.com
+    template-id: d-8d276ce816254b399ebcc962d2f2199a
+    verification-link: http://localhost:8080/user/confirm-email
+
 # application-dev.yml
 # swagger
 springdoc:
@@ -32,4 +38,8 @@ openapi:
     version: 1.0.0
 
 jwt:
-  secretKey: abc@123
+  expiryMinutes: 5
+  expiryDay: 14
+  accessKey: IIwLeRIVsznVTPFEYmA6HiVVBrlKkKqC36OpWzqw8mk=
+  refreshKey: tvszknimPZQEdy3c9TCERBLAkOyoCc2ZvOmGcHsRJgg=
+
